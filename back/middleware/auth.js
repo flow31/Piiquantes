@@ -1,10 +1,12 @@
-const jwt = require("jsonwebtoken");
+require('dotenv').config();
+
+const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
   try {
-    const token = req.headers.authorization.split(" ")[1];
+    const token = req.headers.authorization.split(' ')[1];
     // Décodage du token avec la clé secrète
-    const decodedToken = jwt.verify(token, "RANDOM_TOKEN_SECRET");
+    const decodedToken = jwt.verify(token, process.env.TOKEN_SECRET);
     // Récupération de l'identifiant de l'utilisateur depuis le token décodé
 
     const userId = decodedToken.userId;
@@ -16,6 +18,6 @@ module.exports = (req, res, next) => {
     next();
     // Si le token est invalide, retourne une réponse d'erreur 401
   } catch (error) {
-    res.status(401).json({ message: "Authentification nécessaire." });
+    res.status(401).json({ message: 'Authentification nécessaire.' });
   }
 };
