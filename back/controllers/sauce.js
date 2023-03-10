@@ -37,36 +37,63 @@ exports.modifySauce = (req, res, next) => {
 
   if (req.file) {
     // Si une nouvelle image est fournie, on doit supprimer l'ancienne image.
-    Sauce.findOne({ _id: req.params.id }).then((sauce) => {
-      const filename = sauce.imageUrl.split('/images/')[1]; // On récupère le nom de fichier de l'image actuelle.
-      fs.unlinkSync(`images/${filename}`); // On supprime l'image actuelle du serveur.
-    });
-    sauceObject = {
-      // On met à jour l'objet sauceObject avec les données de la sauce et l'URL de la nouvelle image.
-      ...JSON.parse(req.body.sauce),
-      imageUrl: `${req.protocol}://${req.get('host')}/images/${
-        req.file.filename
-      }`,
-    };
+    Sauce.findOne({ _id: req.params.id })
+      .then((sauce) => {
+        if (!sauce) {
+          return res.status(404).json({ error: 'Sauce non trouvée !' });
+        }
+        // Vérifie que l'utilisateur est bien l'auteur de la sauce
+        if (sauce.userId !== req.auth.userId) {
+          return res.status(401).json({
+            error: "Vous n'êtes pas autorisé à modifier cette sauce !",
+          });
+        }
+        const filename = sauce.imageUrl.split('/images/')[1]; // On récupère le nom de fichier de l'image actuelle.
+        fs.unlink(`images/${filename}`, () => {
+          // On supprime l'image actuelle du serveur.
+        });
+        sauceObject = {
+          // On met à jour l'objet sauceObject avec les données de la sauce et l'URL de la nouvelle image.
+          ...JSON.parse(req.body.sauce),
+          imageUrl: `${req.protocol}://${req.get('host')}/images/${
+            req.file.filename
+          }`,
+        };
+        // Met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
+        Sauce.updateOne(
+          { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
+          { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
+        )
+          .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
+          .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
+      })
+      .catch((error) => res.status(500).json({ error })); // Renvoie une réponse 500 si une erreur interne du serveur se produit
   } else {
     // Sinon, on met simplement à jour l'objet sauceObject avec les données de la sauce provenant de la requête.
     sauceObject = { ...req.body };
+    // Met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
+    Sauce.updateOne(
+      { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
+      { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
+    )
+      .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
+      .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
   }
-
-  Sauce.updateOne(
-    // On met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
-    { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
-    { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
-  )
-    .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
-    .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
 };
 
-// Cette fonction est exportée pour être utilisée dans d'autres fichiers
 exports.deleteSauce = (req, res, next) => {
   // Recherche la sauce avec l'id correspondant dans la base de données
   Sauce.findOne({ _id: req.params.id })
     .then((sauce) => {
+      if (!sauce) {
+        return res.status(404).json({ error: 'Sauce non trouvée !' });
+      }
+      // Vérifie que l'utilisateur est bien l'auteur de la sauce
+      if (sauce.userId !== req.auth.userId) {
+        return res.status(401).json({
+          error: "Vous n'êtes pas autorisé à supprimer cette sauce !",
+        });
+      }
       // Récupère le nom de fichier de l'image à supprimer à partir de l'URL de l'image
       const filename = sauce.imageUrl.split('/images/')[1];
       // Supprime le fichier image du répertoire "images"
@@ -96,63 +123,68 @@ exports.getAllSauces = (req, res, next) => {
     });
 };
 
-// Cette fonction est exportée pour être utilisée dans d'autres fichiers
 exports.likesSauce = (req, res, next) => {
-  // Si l'utilisateur a aimé la sauce
-  if (req.body.like === 1) {
-    // Met à jour la sauce avec le nouvel utilisateur qui a aimé la sauce et incrémente le compteur de likes
-    Sauce.updateOne(
-      { _id: req.params.id },
-      {
-        $addToSet: { usersLiked: req.auth.userId },
-        $inc: { likes: 1 },
-      }
-    )
-      .then(() => res.status(200).json({ message: 'Like ajouté.' })) // Renvoie une réponse 200 avec un message si la mise à jour réussit
-      .catch((error) => res.status(400).json({ error })); // Renvoie une réponse 400 avec une erreur si la mise à jour échoue
-  }
-  // Si l'utilisateur n'a pas aimé la sauce
-  else if (req.body.like === -1) {
-    // Met à jour la sauce avec le nouvel utilisateur qui n'a pas aimé la sauce et incrémente le compteur de dislikes
-    Sauce.updateOne(
-      { _id: req.params.id },
-      {
-        $addToSet: { usersDisliked: req.auth.userId },
-        $inc: { dislikes: 1 },
-      }
-    )
-      .then(() => res.status(200).json({ message: 'Dislike ajouté.' })) // Renvoie une réponse 200 avec un message si la mise à jour réussit
-      .catch((error) => res.status(400).json({ error })); // Renvoie une réponse 400 avec une erreur si la mise à jour échoue
-  } else if (req.body.like === 0) {
-    Sauce.findOne({ _id: req.params.id }) // On cherche la sauce concernée par l'identifiant fourni dans la requête
-      .then((sauce) => {
-        // Si on trouve la sauce, on exécute la fonction suivante
+  // Cherche la sauce correspondante dans la base de données
+  Sauce.findOne({ _id: req.params.id })
+    .then((sauce) => {
+      // Si l'utilisateur like et n'a pas déjà liké la sauce
+      if (req.body.like === 1 && !sauce.usersLiked.includes(req.auth.userId)) {
+        // Ajoute l'utilisateur à la liste des utilisateurs ayant liké la sauce et incrémente le compteur de likes
+        Sauce.updateOne(
+          { _id: req.params.id },
+          {
+            $addToSet: { usersLiked: req.auth.userId },
+            $inc: { likes: 1 },
+          }
+        )
+          .then(() => res.status(200).json({ message: 'Like ajouté.' }))
+          .catch((error) => res.status(400).json({ error }));
+        // Si l'utilisateur dislike et n'a pas déjà disliké la sauce
+      } else if (
+        req.body.like === -1 &&
+        !sauce.usersDisliked.includes(req.auth.userId)
+      ) {
+        // Ajoute l'utilisateur à la liste des utilisateurs ayant disliké la sauce et incrémente le compteur de dislikes
+        Sauce.updateOne(
+          { _id: req.params.id },
+          {
+            $addToSet: { usersDisliked: req.auth.userId },
+            $inc: { dislikes: 1 },
+          }
+        )
+          .then(() => res.status(200).json({ message: 'Dislike ajouté.' }))
+          .catch((error) => res.status(400).json({ error }));
+        // Si l'utilisateur retire son like ou dislike
+      } else if (req.body.like === 0) {
+        // Si l'utilisateur avait liké la sauce
         if (sauce.usersLiked.includes(req.auth.userId)) {
-          // Si l'utilisateur a aimé la sauce précédemment
+          // Retire l'utilisateur de la liste des utilisateurs ayant liké la sauce et décrémente le compteur de likes
           Sauce.updateOne(
-            // On met à jour la sauce en retirant l'utilisateur de la liste des utilisateurs ayant aimé la sauce et en décrémentant le compteur de likes
             { _id: req.params.id },
             {
               $pull: { usersLiked: req.auth.userId },
               $inc: { likes: -1 },
             }
           )
-            .then(() => res.status(200).json({ message: 'Like retiré.' })) // On renvoie une réponse 200 avec un message si la mise à jour réussit
-            .catch((error) => res.status(400).json({ error })); // On renvoie une réponse 400 avec une erreur si la mise à jour échoue
+            .then(() => res.status(200).json({ message: 'Like retiré.' }))
+            .catch((error) => res.status(400).json({ error }));
+          // Si l'utilisateur avait disliké la sauce
         } else if (sauce.usersDisliked.includes(req.auth.userId)) {
-          // Sinon, si l'utilisateur a précédemment disliké la sauce
+          // Retire l'utilisateur de la liste des utilisateurs ayant disliké la sauce et décrémente le compteur de dislikes
           Sauce.updateOne(
-            // On met à jour la sauce en retirant l'utilisateur de la liste des utilisateurs ayant disliké la sauce et en décrémentant le compteur de dislikes
             { _id: req.params.id },
             {
               $pull: { usersDisliked: req.auth.userId },
               $inc: { dislikes: -1 },
             }
           )
-            .then(() => res.status(200).json({ message: 'Dislike retiré.' })) // On renvoie une réponse 200 avec un message si la mise à jour réussit
-            .catch((error) => res.status(400).json({ error })); // On renvoie une réponse 400 avec une erreur si la mise à jour échoue
+            .then(() => res.status(200).json({ message: 'Dislike retiré.' }))
+            .catch((error) => res.status(400).json({ error }));
         }
-      })
-      .catch((error) => res.status(404).json({ error })); // Si la sauce n'existe pas, on renvoie une réponse 404 avec une erreur
-  }
+        // Si la requête n'est pas valide
+      } else {
+        res.status(400).json({ error: 'Requête invalide' });
+      }
+    })
+    .catch((error) => res.status(404).json({ error }));
 };
