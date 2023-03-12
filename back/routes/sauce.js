@@ -1,19 +1,19 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const auth = require("../middleware/auth");
-const multer = require("../middleware/multer-config");
-const sauceCtrl = require("../controllers/sauce");
+const { authenticateUser } = require('../middleware/auth');
+const multer = require('../middleware/multer-config');
+const sauceCtrl = require('../controllers/sauce');
 // Route pour récupérer toutes les sauces
-router.get("/", auth, sauceCtrl.getAllSauces);
+router.get('/', authenticateUser, sauceCtrl.getAllSauces);
 // Route pour créer une nouvelle sauce
-router.post("/", auth, multer, sauceCtrl.createSauce);
+router.post('/', authenticateUser, multer, sauceCtrl.createSauce);
 // Route pour récupérer une sauce spécifique par son identifiant
-router.get("/:id", auth, sauceCtrl.getOneSauce);
+router.get('/:id', authenticateUser, sauceCtrl.getOneSauce);
 // Route pour mettre à jour une sauce existante
-router.put("/:id", auth, multer, sauceCtrl.modifySauce);
+router.put('/:id', authenticateUser, multer, sauceCtrl.modifySauce);
 // Route pour supprimer une sauce existante
-router.delete("/:id", auth, sauceCtrl.deleteSauce);
+router.delete('/:id', authenticateUser, sauceCtrl.deleteSauce);
 // Route pour ajouter ou retirer un like à une sauce
-router.post("/:id/like", auth, sauceCtrl.likesSauce);
+router.post('/:id/like', authenticateUser, sauceCtrl.likesSauce);
 
 module.exports = router;

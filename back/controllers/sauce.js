@@ -2,19 +2,20 @@ const Sauce = require('../models/Sauce'); // On importe le modèle `Sauce` pour 
 const fs = require('fs'); // On importe le module `fs` pour gérer les fichiers sur le système de fichiers local.
 
 exports.createSauce = (req, res, next) => {
-  const sauceObject = JSON.parse(req.body.sauce); // On récupère les données de la sauce envoyées par l'utilisateur.
-  delete sauceObject._id; // On supprime l'attribut `_id` de l'objet `sauceObject`.
+  const sauceObject = JSON.parse(req.body.sauce);
+  delete sauceObject._id;
+  delete sauceObject.userId;
   const sauce = new Sauce({
-    // On crée un nouvel objet `sauce`.
     ...sauceObject,
+    userId: req.auth.userId, // Ajout de l'ID de l'utilisateur à l'objet `sauce`.
     imageUrl: `${req.protocol}://${req.get('host')}/images/${
       req.file.filename
-    }`, // On ajoute l'URL de l'image de la sauce à l'objet `sauce`.
+    }`,
   });
   sauce
-    .save() // On enregistre l'objet `sauce` dans la base de données.
-    .then(() => res.status(201).json({ message: 'Sauce enregistrée !' })) // Si l'enregistrement est réussi, on renvoie une réponse avec un code de statut 201 et un message JSON indiquant que la sauce a été enregistrée.
-    .catch((error) => res.status(400).json({ error })); // Si une erreur se produit lors de l'enregistrement, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
+    .save()
+    .then(() => res.status(201).json({ message: 'Sauce enregistrée !' }))
+    .catch((error) => res.status(400).json({ error }));
 };
 
 exports.getOneSauce = (req, res, next) => {
@@ -35,23 +36,26 @@ exports.getOneSauce = (req, res, next) => {
 exports.modifySauce = (req, res, next) => {
   let sauceObject = {}; // On initialise un objet vide pour stocker les données de la sauce modifiée.
 
-  if (req.file) {
-    // Si une nouvelle image est fournie, on doit supprimer l'ancienne image.
-    Sauce.findOne({ _id: req.params.id })
-      .then((sauce) => {
-        if (!sauce) {
-          return res.status(404).json({ error: 'Sauce non trouvée !' });
-        }
-        // Vérifie que l'utilisateur est bien l'auteur de la sauce
-        if (sauce.userId !== req.auth.userId) {
-          return res.status(401).json({
-            error: "Vous n'êtes pas autorisé à modifier cette sauce !",
-          });
-        }
+  Sauce.findOne({ _id: req.params.id })
+    .then((sauce) => {
+      if (!sauce) {
+        return res.status(404).json({ error: 'Sauce non trouvée !' });
+      }
+
+      // Vérifie que l'utilisateur est bien l'auteur de la sauce
+      if (sauce.userId !== req.auth.userId) {
+        return res.status(401).json({
+          error: "Vous n'êtes pas autorisé à modifier cette sauce !",
+        });
+      }
+
+      if (req.file) {
+        // Si une nouvelle image est fournie, on doit supprimer l'ancienne image.
         const filename = sauce.imageUrl.split('/images/')[1]; // On récupère le nom de fichier de l'image actuelle.
         fs.unlink(`images/${filename}`, () => {
           // On supprime l'image actuelle du serveur.
         });
+
         sauceObject = {
           // On met à jour l'objet sauceObject avec les données de la sauce et l'URL de la nouvelle image.
           ...JSON.parse(req.body.sauce),
@@ -59,26 +63,20 @@ exports.modifySauce = (req, res, next) => {
             req.file.filename
           }`,
         };
-        // Met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
-        Sauce.updateOne(
-          { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
-          { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
-        )
-          .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
-          .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
-      })
-      .catch((error) => res.status(500).json({ error })); // Renvoie une réponse 500 si une erreur interne du serveur se produit
-  } else {
-    // Sinon, on met simplement à jour l'objet sauceObject avec les données de la sauce provenant de la requête.
-    sauceObject = { ...req.body };
-    // Met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
-    Sauce.updateOne(
-      { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
-      { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
-    )
-      .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
-      .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
-  }
+      } else {
+        // Sinon, on met simplement à jour l'objet sauceObject avec les données de la sauce provenant de la requête.
+        sauceObject = { ...req.body };
+      }
+
+      // Met à jour la sauce dans la base de données à l'aide de la méthode updateOne() de Mongoose.
+      Sauce.updateOne(
+        { _id: req.params.id }, // On recherche la sauce à modifier à partir de l'ID de la requête.
+        { ...sauceObject, _id: req.params.id } // On met à jour les propriétés de la sauce en utilisant les données contenues dans sauceObject.
+      )
+        .then(() => res.status(200).json({ message: 'Sauce modifiée !' })) // Si la modification a réussi, on renvoie une réponse avec un code de statut 200 et un message JSON.
+        .catch((error) => res.status(400).json({ error })); // Si la modification a échoué, on renvoie une réponse avec un code de statut 400 et un message JSON contenant des informations sur l'erreur.
+    })
+    .catch((error) => res.status(500).json({ error })); // Renvoie une réponse 500 si une erreur interne du serveur se produit
 };
 
 exports.deleteSauce = (req, res, next) => {
@@ -128,7 +126,11 @@ exports.likesSauce = (req, res, next) => {
   Sauce.findOne({ _id: req.params.id })
     .then((sauce) => {
       // Si l'utilisateur like et n'a pas déjà liké la sauce
-      if (req.body.like === 1 && !sauce.usersLiked.includes(req.auth.userId)) {
+      if (
+        req.body.like === 1 &&
+        !sauce.usersLiked.includes(req.auth.userId) &&
+        !sauce.usersDisLiked.includes(req.auth.userId)
+      ) {
         // Ajoute l'utilisateur à la liste des utilisateurs ayant liké la sauce et incrémente le compteur de likes
         Sauce.updateOne(
           { _id: req.params.id },
