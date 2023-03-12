@@ -144,7 +144,8 @@ exports.likesSauce = (req, res, next) => {
         // Si l'utilisateur dislike et n'a pas déjà disliké la sauce
       } else if (
         req.body.like === -1 &&
-        !sauce.usersDisliked.includes(req.auth.userId)
+        !sauce.usersDisliked.includes(req.auth.userId) &&
+        !sauce.usersLiked.includes(req.auth.userId)
       ) {
         // Ajoute l'utilisateur à la liste des utilisateurs ayant disliké la sauce et incrémente le compteur de dislikes
         Sauce.updateOne(
